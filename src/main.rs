@@ -1,6 +1,7 @@
 #![feature(backtrace)]
 
 mod epub;
+mod ui;
 
 use epub::Epub;
 
@@ -20,10 +21,7 @@ struct Args {
 fn run(args: &Args) -> Result<()> {
     let mut epub = Epub::new(&args.path)?;
 
-    for i in 0..epub.len() {
-        let text = epub.render(i)?;
-        print!("{}\n---\n", text.trim());
-    }
+    ui::run(&mut epub)?;
 
     Ok(())
 }

@@ -2,6 +2,7 @@ mod render;
 
 use render::{render_node, RenderAttributes};
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
@@ -57,15 +58,16 @@ impl Epub {
         self.spine.len()
     }
 
-    pub fn render(&mut self, index: usize) -> Result<String> {
+    pub fn chapter(&mut self, index: usize) -> Result<Vec<String>> {
         let id = &self.spine[index];
         let path = &self.manifest[id];
         let xml = read_archive(&mut self.archive, path)?;
         let doc = Document::parse(&xml)?;
 
         let text = render_node(doc.root(), RenderAttributes::default());
+        let wrapped = textwrap::wrap(text.trim(), 80);
 
-        Ok(text)
+        Ok(wrapped.iter().map(Cow::to_string).collect())
     }
 }
 
