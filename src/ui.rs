@@ -15,7 +15,7 @@ use crossterm::{
 };
 
 pub fn run(epub: &mut Epub) -> Result<()> {
-    let mut current_chapter = 6;
+    let mut current_chapter = 0;
     let mut current_line = 0;
 
     let mut text = epub.chapter(current_chapter)?;
