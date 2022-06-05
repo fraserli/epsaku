@@ -13,10 +13,21 @@ use crossterm::{
         EnterAlternateScreen, LeaveAlternateScreen,
     },
 };
+use serde::{Deserialize, Serialize};
 
-pub fn run(epub: &mut Epub) -> Result<()> {
-    let mut current_chapter = 0;
-    let mut current_line = 0;
+#[derive(Serialize, Deserialize, Clone, Copy)]
+pub struct Progress {
+    pub chapter: usize,
+    pub line: usize,
+}
+
+pub fn run(epub: &mut Epub, progress: Option<Progress>) -> Result<Progress> {
+    let (mut current_chapter, mut current_line) = if let Some(Progress { chapter, line }) = progress
+    {
+        (chapter, line)
+    } else {
+        (0, 0)
+    };
 
     let mut text = epub.chapter(current_chapter)?;
     let mut stdout = std::io::stdout();
@@ -120,5 +131,8 @@ pub fn run(epub: &mut Epub) -> Result<()> {
     execute!(stdout, LeaveAlternateScreen, Show)?;
     disable_raw_mode()?;
 
-    Ok(())
+    Ok(Progress {
+        chapter: current_chapter,
+        line: current_line,
+    })
 }
