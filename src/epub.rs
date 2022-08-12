@@ -6,6 +6,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
+use std::path::Path;
 
 use anyhow::{anyhow, bail, Context, Result};
 use roxmltree::{Document, Node};
@@ -28,9 +29,9 @@ struct Package {
 }
 
 impl Epub {
-    pub fn new(path: &str) -> Result<Self> {
-        let file = File::open(path).with_context(|| format!("unable to open '{path}'"))?;
-        let mut archive = ZipArchive::new(file).with_context(|| format!("'{path}'"))?;
+    pub fn new(path: &Path) -> Result<Self> {
+        let file = File::open(path).with_context(|| format!("unable to open '{}'", path.display()))?;
+        let mut archive = ZipArchive::new(file).with_context(|| format!("'{}'", path.display()))?;
 
         let mimetype = read_archive(&mut archive, "mimetype")?;
         if mimetype.trim() != "application/epub+zip" {

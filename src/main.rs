@@ -9,6 +9,7 @@ use ui::Progress;
 use std::backtrace::BacktraceStatus;
 use std::collections::HashMap;
 use std::fs::File;
+use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
@@ -18,22 +19,22 @@ use clap::Parser;
 struct Args {
     /// Path of EPUB file
     #[clap(required = true)]
-    path: String,
+    path: PathBuf,
 }
 
-fn read_history() -> Result<HashMap<String, Progress>> {
+fn read_history() -> Result<HashMap<PathBuf, Progress>> {
     let home = std::env::var("HOME")?;
     let path = format!("{home}/.local/share/epsaku/history.json");
 
     if let Ok(file) = File::open(&path) {
-        let history: HashMap<String, Progress> = serde_json::from_reader(file)?;
+        let history: HashMap<PathBuf, Progress> = serde_json::from_reader(file)?;
         Ok(history)
     } else {
         Ok(HashMap::new())
     }
 }
 
-fn write_history(history: HashMap<String, Progress>) -> Result<()> {
+fn write_history(history: HashMap<PathBuf, Progress>) -> Result<()> {
     let home = std::env::var("HOME")?;
     let mut path = format!("{home}/.local/share/epsaku");
     std::fs::create_dir_all(&path)?;
@@ -48,11 +49,11 @@ fn write_history(history: HashMap<String, Progress>) -> Result<()> {
 fn run(args: &Args) -> Result<()> {
     let mut epub = Epub::new(&args.path)?;
 
-    let full_path = format!(
-        "{}/{}",
-        std::env::current_dir()?.to_str().unwrap(),
-        &args.path
-    );
+    let full_path: PathBuf = if args.path.is_relative() {
+        [&std::env::current_dir()?, &args.path].iter().collect()
+    } else {
+        args.path.clone()
+    };
 
     let mut history = read_history()?;
 
