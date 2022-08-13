@@ -7,7 +7,7 @@ use crossterm::{
     cursor::{Hide, MoveTo, Show},
     event::{read, Event, KeyModifiers},
     execute, queue,
-    style::Print,
+    style::{Print, Stylize},
     terminal::{
         disable_raw_mode, enable_raw_mode, size, Clear, ClearType, DisableLineWrap,
         EnterAlternateScreen, LeaveAlternateScreen,
@@ -47,6 +47,20 @@ pub fn run(epub: &mut Epub, progress: Option<Progress>) -> Result<Progress> {
                 queue!(stdout, MoveTo(indent, i), Print(line))?;
             }
         }
+
+        let pages = text.len() / rows as usize + 1;
+        let page = current_line / rows as usize + 1;
+        let perc = (current_chapter as f32 / epub.len() as f32
+            + (current_line as f32 / text.len() as f32) / epub.len() as f32)
+            * 100.0;
+
+        queue!(
+            stdout,
+            MoveTo(cols - 5, rows - 1),
+            Print(format!("{:0>2}/{:0>2}", page, pages).bold()),
+            MoveTo(cols - 5, 0),
+            Print(format!(" {perc:>2.0}% ").bold().reverse()),
+        )?;
 
         stdout.flush()?;
 
