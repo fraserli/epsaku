@@ -13,7 +13,11 @@ pub struct RenderAttributes {
     heading: bool,
 }
 
-pub fn render_node(node: Node, mut attributes: RenderAttributes) -> String {
+pub fn render_node(
+    node: Node,
+    images: &mut Vec<String>,
+    mut attributes: RenderAttributes,
+) -> String {
     let mut output = String::new();
 
     let mut newline = false;
@@ -45,7 +49,10 @@ pub fn render_node(node: Node, mut attributes: RenderAttributes) -> String {
                 }
                 attributes.heading = true;
             }
-            "img" => output.push_str(&"[IMG]".reverse().to_string()),
+            "img" => {
+                output.push_str(&format!("[IMG:{}]", images.len()).reverse().to_string());
+                images.push(node.attribute("src").unwrap().to_string());
+            }
             _ => {}
         },
         NodeType::Text => {
@@ -80,7 +87,7 @@ pub fn render_node(node: Node, mut attributes: RenderAttributes) -> String {
 
     let mut buf = String::new();
     for child in node.children() {
-        buf.push_str(&render_node(child, attributes));
+        buf.push_str(&render_node(child, images, attributes));
     }
 
     if newline {

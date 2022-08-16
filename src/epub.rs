@@ -5,10 +5,12 @@ use render::{render_node, RenderAttributes};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::File;
+use std::io;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
+use path_clean::clean;
 use roxmltree::{Document, Node};
 use zip::ZipArchive;
 
@@ -30,7 +32,8 @@ struct Package {
 
 impl Epub {
     pub fn new(path: &Path) -> Result<Self> {
-        let file = File::open(path).with_context(|| format!("unable to open '{}'", path.display()))?;
+        let file =
+            File::open(path).with_context(|| format!("unable to open '{}'", path.display()))?;
         let mut archive = ZipArchive::new(file).with_context(|| format!("'{}'", path.display()))?;
 
         let mimetype = read_archive(&mut archive, "mimetype")?;
@@ -59,16 +62,31 @@ impl Epub {
         self.spine.len()
     }
 
-    pub fn chapter(&mut self, index: usize) -> Result<Vec<String>> {
+    pub fn chapter(&mut self, index: usize) -> Result<(Vec<String>, Vec<String>)> {
         let id = &self.spine[index];
         let path = &self.manifest[id];
         let xml = read_archive(&mut self.archive, path)?;
         let doc = Document::parse(&xml)?;
 
-        let text = render_node(doc.root(), RenderAttributes::default());
+        let mut images = Vec::new();
+
+        let text = render_node(doc.root(), &mut images, RenderAttributes::default());
         let wrapped = textwrap::wrap(text.trim(), 80);
 
-        Ok(wrapped.iter().map(Cow::to_string).collect())
+        Ok((wrapped.iter().map(Cow::to_string).collect(), images))
+    }
+
+    pub fn image(&mut self, chapter: usize, src: &str) -> Result<String> {
+        let mut p = PathBuf::from(&self.manifest[&self.spine[chapter]]);
+        p.pop();
+
+        let mut file =
+            self.archive
+                .by_name(&clean(&format!("{}/{}", p.to_str().unwrap_or(""), src)))?;
+        let path = format!("/tmp/epsaku-{chapter}");
+        let mut outfile = File::create(&path)?;
+        io::copy(&mut file, &mut outfile)?;
+        Ok(path)
     }
 }
 

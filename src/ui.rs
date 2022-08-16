@@ -1,11 +1,11 @@
 use crate::epub::Epub;
 
-use std::io::Write;
+use std::io::{stdout, Write};
 
 use anyhow::Result;
 use crossterm::{
-    cursor::{Hide, MoveTo, Show},
-    event::{read, Event, KeyModifiers},
+    cursor::{position, Hide, MoveLeft, MoveTo, Show},
+    event::{read, Event, KeyCode, KeyEvent, KeyModifiers},
     execute, queue,
     style::{Print, Stylize},
     terminal::{
@@ -29,8 +29,10 @@ pub fn run(epub: &mut Epub, progress: Option<Progress>) -> Result<Progress> {
         (0, 0)
     };
 
-    let mut text = epub.chapter(current_chapter)?;
-    let mut stdout = std::io::stdout();
+    let mut status = String::new();
+
+    let (mut text, mut images) = epub.chapter(current_chapter)?;
+    let mut stdout = stdout();
 
     enable_raw_mode()?;
     execute!(stdout, EnterAlternateScreen, DisableLineWrap, Hide)?;
@@ -60,7 +62,11 @@ pub fn run(epub: &mut Epub, progress: Option<Progress>) -> Result<Progress> {
             Print(format!("{:0>2}/{:0>2}", page, pages).bold()),
             MoveTo(cols - 5, 0),
             Print(format!(" {perc:>2.0}% ").bold().reverse()),
+            MoveTo(0, cols - 1),
+            Print(status.clone().bold().reverse()),
         )?;
+
+        status.clear();
 
         stdout.flush()?;
 
@@ -82,7 +88,7 @@ pub fn run(epub: &mut Epub, progress: Option<Progress>) -> Result<Progress> {
                         } else if current_chapter < epub.len() - 1 {
                             current_line = 0;
                             current_chapter += 1;
-                            text = epub.chapter(current_chapter)?;
+                            (text, images) = epub.chapter(current_chapter)?;
                         }
                     }
                     // Scroll up by a page
@@ -91,7 +97,7 @@ pub fn run(epub: &mut Epub, progress: Option<Progress>) -> Result<Progress> {
                             current_line -= rows as usize;
                         } else if current_line == 0 && current_chapter > 0 {
                             current_chapter -= 1;
-                            text = epub.chapter(current_chapter)?;
+                            (text, images) = epub.chapter(current_chapter)?;
                             current_line = ((text.len() - 1) / rows as usize) * rows as usize;
                         } else {
                             current_line = 0;
@@ -114,7 +120,7 @@ pub fn run(epub: &mut Epub, progress: Option<Progress>) -> Result<Progress> {
                         if current_chapter < epub.len() - 1 {
                             current_chapter += 1;
                             current_line = 0;
-                            text = epub.chapter(current_chapter)?;
+                            (text, images) = epub.chapter(current_chapter)?;
                         }
                     }
                     // Go to previous chapter
@@ -122,7 +128,7 @@ pub fn run(epub: &mut Epub, progress: Option<Progress>) -> Result<Progress> {
                         if current_chapter > 0 {
                             current_chapter -= 1;
                             current_line = 0;
-                            text = epub.chapter(current_chapter)?;
+                            (text, images) = epub.chapter(current_chapter)?;
                         }
                     }
                     // Jump to start of chapter
@@ -132,6 +138,28 @@ pub fn run(epub: &mut Epub, progress: Option<Progress>) -> Result<Progress> {
                     // Jump to end of chapter
                     Char('G') => {
                         current_line = ((text.len() - 1) / rows as usize) * rows as usize;
+                    }
+                    Char('i') => {
+                        if images.len() == 1 {
+                            let path = epub.image(current_chapter, &images[0])?;
+                            std::thread::spawn(move || {
+                                open::that(&path).unwrap();
+                                let _ = std::fs::remove_file(&path);
+                            });
+                        } else if !images.is_empty() {
+                            let line = read_line("Image: ")?;
+                            if let Ok(sel) = line.parse::<usize>() && sel < images.len() {
+                                let path = epub.image(current_chapter, &images[sel])?;
+                                std::thread::spawn(move || {
+                                    open::that(&path).unwrap();
+                                    let _ = std::fs::remove_file(&path);
+                                });
+                            } else {
+                                status.push_str("Error: invalid image");
+                            }
+                        } else {
+                            status.push_str("Error: no images");
+                        }
                     }
                     _ => {}
                 }
@@ -149,4 +177,38 @@ pub fn run(epub: &mut Epub, progress: Option<Progress>) -> Result<Progress> {
         chapter: current_chapter,
         line: current_line,
     })
+}
+
+pub fn read_line(prompt: &str) -> Result<String> {
+    execute!(
+        stdout(),
+        MoveTo(0, size()?.0 - 1),
+        Clear(ClearType::CurrentLine),
+        Print(prompt),
+        Show
+    )?;
+
+    let mut line = String::new();
+    while let Event::Key(KeyEvent { code, .. }) = read()? {
+        match code {
+            KeyCode::Enter => {
+                break;
+            }
+            KeyCode::Backspace => {
+                if position()?.0 as usize > prompt.len() {
+                    execute!(stdout(), MoveLeft(1), Clear(ClearType::UntilNewLine))?;
+                    line.pop();
+                }
+            }
+            KeyCode::Char(c) => {
+                line.push(c);
+                execute!(stdout(), Print(c))?;
+            }
+            _ => {}
+        }
+    }
+
+    execute!(stdout(), Hide)?;
+
+    Ok(line)
 }
