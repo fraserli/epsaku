@@ -1,4 +1,4 @@
-#![feature(backtrace)]
+#![feature(let_chains)]
 
 mod epub;
 mod ui;
